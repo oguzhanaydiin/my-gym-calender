@@ -233,9 +233,9 @@ function isSelected(day: number) {
 }
 
 function tagIcon(tag: DayTag) {
-  if (tag === 'gym') return 'i-lucide-dumbbell'
-  if (tag === 'cardio') return 'i-lucide-heart-pulse'
-  return 'i-lucide-bed-single'
+  if (tag === 'gym') return 'gym'
+  if (tag === 'cardio') return 'cardio'
+  return 'rest'
 }
 
 function tagTone(tag: DayTag) {
@@ -252,6 +252,15 @@ function dayTags(day: number) {
 function dayMuscles(day: number) {
   const key = toDateKey(viewedMonth.value.getFullYear(), viewedMonth.value.getMonth(), day)
   return logs.value[key]?.muscles ?? []
+}
+
+function dayNote(day: number) {
+  const key = toDateKey(viewedMonth.value.getFullYear(), viewedMonth.value.getMonth(), day)
+  return logs.value[key]?.note?.trim() ?? ''
+}
+
+function muscleLabel(muscle: MuscleGroup) {
+  return MUSCLE_OPTIONS.find(o => o.key === muscle)?.label ?? muscle
 }
 
 function closeModal() {
@@ -275,94 +284,105 @@ definePageMeta({
 <template>
   <div class="h-screen overflow-hidden bg-linear-to-br from-rose-100 via-orange-50 to-cyan-100 px-2 py-2 sm:px-4 sm:py-4 lg:px-6 lg:py-6">
     <div class="mx-auto flex h-full w-full max-w-7xl flex-col rounded-3xl border border-white/70 bg-white/80 p-3 shadow-xl backdrop-blur sm:p-5 lg:p-6">
-      <div class="mb-3 flex flex-wrap items-center justify-between gap-3 sm:mb-4">
-        <div>
-          <h1 class="text-2xl font-black tracking-tight text-zinc-900 sm:text-3xl lg:text-4xl">
-            Gym Calendar
-          </h1>
-          <p class="text-sm font-medium text-zinc-700 sm:text-base">
-            Tap any day to add workout badges and notes.
-          </p>
-        </div>
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h1 class="text-2xl font-black tracking-tight text-zinc-900 sm:text-3xl lg:text-4xl">
+          Gym Calendar
+        </h1>
 
         <div class="flex items-center gap-2">
-          <button
-            type="button"
-            class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 bg-white/90 transition hover:bg-rose-50"
-            @click="previousMonth"
-          >
-            <CuteIcon
-              name="chevronLeft"
-              class="size-5"
-            />
-          </button>
-          <UButton
-            color="neutral"
-            variant="soft"
-            @click="jumpToToday"
-          >
-            Today
-          </UButton>
-          <button
-            type="button"
-            class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 bg-white/90 transition hover:bg-rose-50"
-            @click="nextMonth"
-          >
-            <CuteIcon
-              name="chevronRight"
-              class="size-5"
-            />
-          </button>
+          <span class="rounded-lg bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-800">
+            {{ monthSummary.gym }} Gym
+          </span>
+          <span class="rounded-lg bg-sky-100 px-2 py-1 text-xs font-bold text-sky-800">
+            {{ monthSummary.cardio }} Cardio
+          </span>
+          <span class="rounded-lg bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">
+            {{ monthSummary.rest }} Rest
+          </span>
+
+          <div class="ml-1 flex items-center gap-1.5">
+            <button
+              type="button"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white/90 transition hover:bg-rose-50"
+              @click="previousMonth"
+            >
+              <CuteIcon
+                name="chevronLeft"
+                class="size-5"
+              />
+            </button>
+            <UButton
+              color="neutral"
+              variant="soft"
+              size="sm"
+              @click="jumpToToday"
+            >
+              Today
+            </UButton>
+            <button
+              type="button"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white/90 transition hover:bg-rose-50"
+              @click="nextMonth"
+            >
+              <CuteIcon
+                name="chevronRight"
+                class="size-5"
+              />
+            </button>
+          </div>
         </div>
       </div>
 
-      <div class="mb-3 rounded-2xl bg-zinc-900 px-4 py-2.5 text-center sm:mb-4">
-        <p class="text-lg font-bold text-white sm:text-xl lg:text-2xl">
+      <div class="mb-2 rounded-xl bg-zinc-900 px-4 py-1.5 text-center">
+        <p class="text-sm font-bold text-white sm:text-base">
           {{ monthTitle }}
         </p>
       </div>
 
-      <div class="mb-1.5 grid grid-cols-7 gap-1 sm:gap-1.5">
+      <div class="mb-1 grid grid-cols-7 gap-1 sm:gap-1.5">
         <span
           v-for="dayName in WEEKDAYS"
           :key="dayName"
-          class="rounded-lg bg-zinc-100 px-1 py-1.5 text-center text-[11px] font-bold uppercase tracking-wide text-zinc-700 sm:text-xs"
+          class="rounded-lg bg-zinc-100 px-1 py-1 text-center text-[10px] font-bold uppercase tracking-wide text-zinc-600 sm:text-[11px]"
         >
           {{ dayName }}
         </span>
       </div>
 
-      <div class="grid flex-1 grid-cols-7 gap-1 min-h-0 sm:gap-1.5">
+      <div class="grid min-h-0 flex-1 auto-rows-fr grid-cols-7 gap-1 sm:gap-1.5">
         <template
           v-for="(day, index) in calendarDays"
           :key="`${day}-${index}`"
         >
           <div
             v-if="day === null"
-            class="h-[clamp(3.75rem,7.5vh,6rem)] rounded-xl border border-transparent"
+            class="rounded-2xl"
           />
 
           <button
             v-else
             type="button"
-            class="flex h-[clamp(3.75rem,7.5vh,6rem)] flex-col items-start rounded-xl border p-1 text-left transition hover:-translate-y-0.5 hover:shadow sm:p-1.5"
+            class="flex h-full flex-col gap-0.5 rounded-2xl border p-1.5 text-left transition hover:-translate-y-0.5 hover:shadow-md sm:p-2"
             :class="[
               isSelected(day)
-                ? 'border-rose-500 bg-rose-50 ring-2 ring-rose-200'
-                : 'border-zinc-200 bg-white hover:border-zinc-400',
-              isToday(day) ? 'shadow-[inset_0_0_0_1px_rgba(16,185,129,0.8)]' : ''
+                ? 'border-rose-400 bg-linear-to-b from-rose-50 to-white ring-2 ring-rose-300 shadow-sm'
+                : 'border-zinc-100 bg-white hover:border-zinc-300 hover:bg-zinc-50/60',
+              isToday(day) && !isSelected(day) ? 'border-emerald-300 bg-emerald-50/40' : ''
             ]"
             @click="pickDay(day)"
           >
-            <span class="text-xs font-extrabold text-zinc-900 sm:text-sm">
+            <span
+              class="text-xs font-black leading-none sm:text-sm"
+              :class="isToday(day) ? 'text-emerald-600' : 'text-zinc-800'"
+            >
               {{ day }}
             </span>
 
-            <div class="flex flex-wrap gap-1">
+            <div class="flex flex-wrap gap-0.5">
               <span
                 v-for="tag in dayTags(day)"
                 :key="tag"
-                class="inline-flex items-center gap-1 rounded-full border px-1 py-0.5 text-[9px] font-bold sm:text-[10px]"
+                class="inline-flex items-center gap-0.5 rounded-full border px-1 py-0.5 text-[9px] font-bold leading-none sm:text-[10px]"
                 :class="tagTone(tag)"
               >
                 <CuteIcon
@@ -373,41 +393,33 @@ definePageMeta({
               </span>
             </div>
 
-            <div class="mt-auto flex gap-0.5">
+            <div
+              v-if="dayMuscles(day).length"
+              class="flex flex-wrap gap-0.5"
+            >
               <span
                 v-for="muscle in dayMuscles(day).slice(0, 3)"
                 :key="muscle"
-                class="inline-flex"
+                class="inline-flex items-center rounded-full border border-violet-300 bg-violet-100 px-1 py-0.5 text-[9px] font-bold leading-none text-violet-900 sm:text-[10px]"
               >
-                <CuteIcon
-                  :name="muscle"
-                  class="size-3 sm:size-4"
-                />
+                {{ muscleLabel(muscle) }}
+              </span>
+              <span
+                v-if="dayMuscles(day).length > 3"
+                class="inline-flex items-center rounded-full border border-zinc-300 bg-zinc-100 px-1 py-0.5 text-[9px] font-bold leading-none text-zinc-600 sm:text-[10px]"
+              >
+                +{{ dayMuscles(day).length - 3 }}
               </span>
             </div>
+
+            <p
+              v-if="dayNote(day)"
+              class="mt-auto truncate text-[8px] italic leading-none text-zinc-400 sm:text-[9px]"
+            >
+              {{ dayNote(day) }}
+            </p>
           </button>
         </template>
-      </div>
-
-      <div class="mt-3 grid grid-cols-3 gap-2 text-center text-[11px] font-semibold text-zinc-700 sm:mt-4 sm:gap-3 sm:text-xs">
-        <div class="rounded-xl bg-emerald-100 p-2 sm:p-3">
-          <p class="text-lg font-black text-emerald-800 sm:text-xl lg:text-2xl">
-            {{ monthSummary.gym }}
-          </p>
-          <p>Gym Days</p>
-        </div>
-        <div class="rounded-xl bg-sky-100 p-2 sm:p-3">
-          <p class="text-lg font-black text-sky-800 sm:text-xl lg:text-2xl">
-            {{ monthSummary.cardio }}
-          </p>
-          <p>Cardio Days</p>
-        </div>
-        <div class="rounded-xl bg-amber-100 p-2 sm:p-3">
-          <p class="text-lg font-black text-amber-800 sm:text-xl lg:text-2xl">
-            {{ monthSummary.rest }}
-          </p>
-          <p>Rest Days</p>
-        </div>
       </div>
     </div>
 
@@ -433,7 +445,7 @@ definePageMeta({
           >
             <CuteIcon
               name="close"
-              class="size-5"
+              class="size-6"
             />
           </UButton>
         </div>
@@ -441,37 +453,37 @@ definePageMeta({
         <div class="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
           <button
             type="button"
-            class="inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition"
+            class="inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-bold transition"
             :class="hasTag('gym') ? 'border-emerald-500 bg-emerald-50 text-emerald-900' : 'border-zinc-200 text-zinc-700 hover:border-zinc-400'"
             @click="toggleTag('gym')"
           >
             <CuteIcon
               name="gym"
-              class="size-5"
+              class="size-6"
             />
             Gym
           </button>
           <button
             type="button"
-            class="inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition"
+            class="inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-bold transition"
             :class="hasTag('cardio') ? 'border-sky-500 bg-sky-50 text-sky-900' : 'border-zinc-200 text-zinc-700 hover:border-zinc-400'"
             @click="toggleTag('cardio')"
           >
             <CuteIcon
               name="cardio"
-              class="size-5"
+              class="size-6"
             />
             Cardio
           </button>
           <button
             type="button"
-            class="inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition"
+            class="inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-bold transition"
             :class="hasTag('rest') ? 'border-amber-500 bg-amber-50 text-amber-900' : 'border-zinc-200 text-zinc-700 hover:border-zinc-400'"
             @click="toggleTag('rest')"
           >
             <CuteIcon
               name="rest"
-              class="size-5"
+              class="size-6"
             />
             Rest
           </button>
@@ -485,15 +497,11 @@ definePageMeta({
             v-for="muscle in MUSCLE_OPTIONS"
             :key="muscle.key"
             type="button"
-            class="inline-flex items-center justify-center gap-2 rounded-xl border px-2 py-2 text-xs font-bold transition sm:text-sm"
+            class="inline-flex items-center justify-center gap-2 rounded-xl border px-2 py-2.5 text-xs font-bold transition sm:text-sm"
             :class="hasMuscle(muscle.key) ? 'border-violet-500 bg-violet-50 text-violet-900' : 'border-zinc-200 text-zinc-700 hover:border-zinc-400'"
             @click="toggleMuscle(muscle.key)"
           >
-            <CuteIcon
-              :name="muscle.key"
-              class="size-5"
-            />
-            <span>{{ muscle.label }}</span>
+            {{ muscle.label }}
           </button>
         </div>
 
