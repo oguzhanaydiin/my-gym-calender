@@ -24,9 +24,11 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const today = new Date()
 const viewedMonth = ref(new Date(today.getFullYear(), today.getMonth(), 1))
 const selectedDateKey = ref(toDateKey(today.getFullYear(), today.getMonth(), today.getDate()))
-const noteInput = ref('')
 const logs = ref<Record<string, DayLog>>({})
 const isModalOpen = ref(false)
+
+const draftLog = ref<DayLog>({ tags: [], muscles: [], note: '' })
+const originalWasEmpty = ref(true)
 
 const monthTitle = computed(() => {
   return new Intl.DateTimeFormat('en-US', {
@@ -97,10 +99,6 @@ const selectedDateLabel = computed(() => {
   }).format(new Date(year, month - 1, day))
 })
 
-const selectedLog = computed<DayLog>(() => {
-  return logs.value[selectedDateKey.value] ?? { tags: [], muscles: [], note: '' }
-})
-
 onMounted(() => {
   const raw = localStorage.getItem(STORAGE_KEY)
 
@@ -126,17 +124,32 @@ onMounted(() => {
       logs.value = {}
     }
   }
-
-  noteInput.value = selectedLog.value.note
 })
 
 watch(logs, (value) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
 }, { deep: true })
 
-watch(selectedDateKey, () => {
-  noteInput.value = selectedLog.value.note
+watch(isModalOpen, (open) => {
+  if (open) {
+    document.addEventListener('keydown', handleModalKeydown)
+  } else {
+    document.removeEventListener('keydown', handleModalKeydown)
+  }
 })
+
+function handleModalKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    closeModal()
+  } else if (e.key === 'Enter') {
+    const isTextarea = (e.target as HTMLElement).tagName === 'TEXTAREA'
+    if (!isTextarea || e.ctrlKey || e.metaKey) {
+      e.preventDefault()
+      saveDay()
+    }
+  }
+}
 
 function toDateKey(year: number, monthIndex: number, day: number) {
   const month = String(monthIndex + 1).padStart(2, '0')
@@ -157,28 +170,32 @@ function jumpToToday() {
   selectedDateKey.value = toDateKey(today.getFullYear(), today.getMonth(), today.getDate())
 }
 
+function isLogEmpty(log: DayLog | undefined) {
+  if (!log) return true
+  return log.tags.length === 0 && log.muscles.length === 0 && !log.note.trim()
+}
+
 function pickDay(day: number) {
   const year = viewedMonth.value.getFullYear()
   const month = viewedMonth.value.getMonth()
   selectedDateKey.value = toDateKey(year, month, day)
+
+  const existing = logs.value[selectedDateKey.value]
+  originalWasEmpty.value = isLogEmpty(existing)
+
+  draftLog.value = existing
+    ? { tags: [...existing.tags], muscles: [...existing.muscles], note: existing.note }
+    : { tags: [], muscles: [], note: '' }
+
   isModalOpen.value = true
 }
 
-function saveNote() {
-  const existing = logs.value[selectedDateKey.value] ?? { tags: [], muscles: [], note: '' }
-  logs.value[selectedDateKey.value] = {
-    ...existing,
-    note: noteInput.value.trim()
-  }
-}
-
 function hasTag(tag: DayTag) {
-  return selectedLog.value.tags.includes(tag)
+  return draftLog.value.tags.includes(tag)
 }
 
 function toggleTag(tag: DayTag) {
-  const existing = logs.value[selectedDateKey.value] ?? { tags: [], muscles: [], note: '' }
-  const tags = new Set(existing.tags)
+  const tags = new Set(draftLog.value.tags)
 
   if (tags.has(tag)) {
     tags.delete(tag)
@@ -193,19 +210,15 @@ function toggleTag(tag: DayTag) {
     }
   }
 
-  logs.value[selectedDateKey.value] = {
-    ...existing,
-    tags: Array.from(tags)
-  }
+  draftLog.value = { ...draftLog.value, tags: Array.from(tags) }
 }
 
 function hasMuscle(muscle: MuscleGroup) {
-  return selectedLog.value.muscles.includes(muscle)
+  return draftLog.value.muscles.includes(muscle)
 }
 
 function toggleMuscle(muscle: MuscleGroup) {
-  const existing = logs.value[selectedDateKey.value] ?? { tags: [], muscles: [], note: '' }
-  const muscles = new Set(existing.muscles)
+  const muscles = new Set(draftLog.value.muscles)
 
   if (muscles.has(muscle)) {
     muscles.delete(muscle)
@@ -213,10 +226,7 @@ function toggleMuscle(muscle: MuscleGroup) {
     muscles.add(muscle)
   }
 
-  logs.value[selectedDateKey.value] = {
-    ...existing,
-    muscles: Array.from(muscles)
-  }
+  draftLog.value = { ...draftLog.value, muscles: Array.from(muscles) }
 }
 
 function isToday(day: number) {
@@ -259,21 +269,40 @@ function dayNote(day: number) {
   return logs.value[key]?.note?.trim() ?? ''
 }
 
+function dayTintClass(day: number) {
+  if (isSelected(day) || isToday(day)) return ''
+  const tags = dayTags(day)
+  if (tags.includes('gym')) return 'bg-emerald-50/70 border-emerald-100'
+  if (tags.includes('cardio')) return 'bg-sky-50/70 border-sky-100'
+  if (tags.includes('rest')) return 'bg-amber-50/70 border-amber-100'
+  return ''
+}
+
 function muscleLabel(muscle: MuscleGroup) {
   return MUSCLE_OPTIONS.find(o => o.key === muscle)?.label ?? muscle
 }
 
-function closeModal() {
+function clearSelectedDay() {
+  draftLog.value = { tags: [], muscles: [], note: '' }
+}
+
+function saveDay() {
+  const note = draftLog.value.note.trim()
+  const draft = { ...draftLog.value, note }
+
+  if (!isLogEmpty(draft) || logs.value[selectedDateKey.value]) {
+    logs.value[selectedDateKey.value] = draft
+  }
+
   isModalOpen.value = false
 }
 
-function clearSelectedDay() {
-  logs.value[selectedDateKey.value] = {
-    tags: [],
-    muscles: [],
-    note: ''
+function closeModal() {
+  if (originalWasEmpty.value && !isLogEmpty(draftLog.value)) {
+    logs.value[selectedDateKey.value] = { ...draftLog.value, note: draftLog.value.note.trim() }
   }
-  noteInput.value = ''
+
+  isModalOpen.value = false
 }
 
 definePageMeta({
@@ -303,13 +332,10 @@ definePageMeta({
           <div class="ml-1 flex items-center gap-1.5">
             <button
               type="button"
-              class="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white/90 transition hover:bg-rose-50"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-900 bg-white/90 text-sm font-bold text-zinc-900 transition hover:bg-rose-50"
               @click="previousMonth"
             >
-              <CuteIcon
-                name="chevronLeft"
-                class="size-5"
-              />
+              &lt;
             </button>
             <UButton
               color="neutral"
@@ -321,13 +347,10 @@ definePageMeta({
             </UButton>
             <button
               type="button"
-              class="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white/90 transition hover:bg-rose-50"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-900 bg-white/90 text-sm font-bold text-zinc-900 transition hover:bg-rose-50"
               @click="nextMonth"
             >
-              <CuteIcon
-                name="chevronRight"
-                class="size-5"
-              />
+              &gt;
             </button>
           </div>
         </div>
@@ -362,12 +385,13 @@ definePageMeta({
           <button
             v-else
             type="button"
-            class="flex h-full flex-col gap-0.5 rounded-2xl border p-1.5 text-left transition hover:-translate-y-0.5 hover:shadow-md sm:p-2"
+            class="flex h-full flex-col gap-0.5 rounded-2xl border p-1.5 text-left sm:p-2"
             :class="[
               isSelected(day)
                 ? 'border-rose-400 bg-linear-to-b from-rose-50 to-white ring-2 ring-rose-300 shadow-sm'
-                : 'border-zinc-100 bg-white hover:border-zinc-300 hover:bg-zinc-50/60',
-              isToday(day) && !isSelected(day) ? 'border-emerald-300 bg-emerald-50/40' : ''
+                : isToday(day)
+                  ? 'border-emerald-300 bg-emerald-50/40 hover:border-emerald-400'
+                  : `border-zinc-100 hover:border-zinc-300 ${dayTintClass(day) || 'bg-white hover:bg-zinc-50/60'}`
             ]"
             @click="pickDay(day)"
           >
@@ -438,16 +462,13 @@ definePageMeta({
               Add badges and notes for this day.
             </p>
           </div>
-          <UButton
-            color="neutral"
-            variant="ghost"
+          <button
+            type="button"
+            class="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-900 text-sm font-bold text-zinc-900 transition hover:bg-zinc-100"
             @click="closeModal"
           >
-            <CuteIcon
-              name="close"
-              class="size-6"
-            />
-          </UButton>
+            ✕
+          </button>
         </div>
 
         <div class="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -513,10 +534,9 @@ definePageMeta({
         </label>
         <textarea
           id="day-note"
-          v-model="noteInput"
+          v-model="draftLog.note"
           class="min-h-32 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-rose-400 focus:ring-4 focus:ring-rose-100"
           placeholder="Leg day, PR, how you felt, quick diary..."
-          @input="saveNote"
         />
 
         <div class="mt-4 flex flex-wrap justify-between gap-2">
@@ -529,9 +549,9 @@ definePageMeta({
           </UButton>
           <UButton
             color="primary"
-            @click="closeModal"
+            @click="saveDay"
           >
-            Done
+            Save
           </UButton>
         </div>
       </div>
