@@ -6,7 +6,7 @@ const props = defineProps<{
 const ICON_PATHS: Record<string, string> = {
   gym: '/icons/status/gym.svg',
   cardio: '/icons/status/cardio.svg',
-  rest: '/icons/status/rest.svg',
+  rest: '/icons/status/rest.svg'
 }
 
 const normalizedName = computed(() =>
